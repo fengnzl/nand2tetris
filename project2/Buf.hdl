@@ -1,0 +1,13 @@
+/**
+ * Buffer
+ * out = in
+ */
+CHIP Buf {
+    IN in;
+    OUT out;
+
+    PARTS:
+    //// Replace this comment with your code.
+    Nand(a=in, b=in, out=notIn);
+    Nand(a=notIn, b=notIn, out=out);
+}
