@@ -18,3 +18,67 @@ Here is an example for when you want to wire a constant value(0 or 1) into a pin
 MyChip(..., a=false, ...);
 MyChip(..., a=true, ...);
 ```
+
+Working with registers and memeory:
+- D: data register
+- A: address/ data register
+- M: the currently selected memory register, M = RAM[A]
+
+Typical operations:
+
+```hdl
+// D = 10
+@10
+D = A
+
+// D++
+D = D + 1
+
+// D = RAM[17]
+@17
+D = M
+
+// RAM[17] = 0
+@17
+M = 0
+
+// RAM[17] = 10
+@10
+D = A
+@17
+M = D
+
+// RAM[5] = RAM[3]
+@3
+D = M
+@5
+M = D
+
+// RAM[2] = RAM[0] + RAM[1]
+@0
+D = M
+@1
+D = D + M
+@2
+M = D
+
+@6
+0;JMP
+```
+
+Best Practice:
+- Design the program using the pseudo code
+- Write the program in assembly language
+- Test the program (on paper) using a variable-value trace table
+
+
+How to load the local multi.asm file in the Web IDE?
+1. Go to the Assembler tab.
+
+2. Click on "load file" in the source block, and load Mult.asm.
+
+3. Now paste the contents of your local copy of Mult.asm into that browser copy of Mult.asm. Whatever you paste there will remain, similar to previous projects.
+
+4. Click on "Translate all in the source block"
+
+5. After it's translated, click on 'the CPU emulator" in the Binary Code block
