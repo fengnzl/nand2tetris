@@ -1,0 +1,137 @@
+// This file is part of www.nand2tetris.org
+// and the book "The Elements of Computing Systems"
+// by Nisan and Schocken, MIT Press.
+// File name: projects/5/CPU.hdl
+/**
+ * The Hack Central Processing unit (CPU).
+ * Parses the binary code in the instruction input and executes it according to the
+ * Hack machine language specification. In the case of a C-instruction, computes the
+ * function specified by the instruction. If the instruction specifies to read a memory
+ * value, the inM input is expected to contain this value. If the instruction specifies
+ * to write a value to the memory, sets the outM output to this value, sets the addressM
+ * output to the target address, and asserts the writeM output (when writeM = 0, any
+ * value may appear in outM).
+ * If the reset input is 0, computes the address of the next instruction and sets the
+ * pc output to that value. If the reset input is 1, sets pc to 0.
+ * Note: The outM and writeM outputs are combinational: they are affected by the
+ * instruction's execution during the current cycle. The addressM and pc outputs are
+ * clocked: although they are affected by the instruction's execution, they commit to
+ * their new values only in the next cycle.
+ */
+ CHIP CPU {
+
+    IN  inM[16],         // M value input  (M = contents of RAM[A])
+        instruction[16], // Instruction for execution
+        reset;           // Signals whether to re-start the current
+                         // program (reset==1) or continue executing
+                         // the current program (reset==0).
+
+    OUT outM[16],        // M value output
+        writeM,          // Write to M? 
+        addressM[15],    // Address in data memory (of M)
+        pc[15];          // address of next instruction
+
+    PARTS:
+	//// Replace this comment with your code.
+    // judge A instruction or not instruction[15] = 0 is A otherwise is C
+    Not(in=instruction[15], out=isAInstruction);
+    // a bit: instruction[12]
+    // cccccc: instruction[7..11]
+    // ddd: instruction[4...6];d0 save to M; d1 save to D register; d2 save to A register
+    // jjj: instruction[0..3]
+
+    // is c instruction and store in A register d2=inst[5]
+    And(a=instruction[15], b=instruction[5], out=isCStoreA);
+    // the input of A register. isCstoreA a C-instruction and ddd specifies storage to A, it is 1.
+    Mux16(a=instruction, b=outALU, sel=isCStoreA, out=inA);
+    // register A loading control
+    Or(a=isAInstruction, b=isCStoreA, out=loadA);
+    // initial register A
+    Register(in=inA, load=loadA, out=outA, out[0..14]=addressM);
+
+    // get ALU input y
+    Mux16(a=outA, b=inM, sel=instruction[12], out=ALUInputY);
+
+    // implementation of D register
+    // is C instruction and store in D register d1=inst[4]
+    And(a=instruction[15], b=instruction[4], out=isCStoreD);
+    DRegister(in=outALU, load=isCStoreD, out=outD);
+
+    // implementation ALU
+    // ALU control bits: c1(zx)=inst[11], c2(nx)=inst[10], c3(zy)=inst[9], c4(ny)=inst[8], c5(f)=inst[7], c6(no)=inst[6]
+    ALU(
+        x=outD,
+        y=ALUInputY,
+        zx=instruction[11],
+        nx=instruction[10],
+        zy=instruction[9],
+        ny=instruction[8],
+        f=instruction[7],
+        no=instruction[6],
+        out=outALU,
+        out=outM,
+        zr=zr,
+        ng=ng
+    );
+
+    // get writeM d0=inst[3]
+    And(a=instruction[15], b=instruction[3], out=writeM);
+
+    // get jump condition
+    // jjj: 000 not jump;001 JGT;010 JEQ;011 JGE;100 JLT;101 JLE;111 JMP
+   
+    Not(in=ng, out=notNg);
+    Not(in=zr, out=notZr);
+
+     // JGT: ng = 0 and zr = 0
+    And(a=notNg, b=notZr, out=jgt);
+    Mux16(a=false, b=true, sel=jgt, out=jgt16);
+
+    // JEQ zr = 1
+    And(a=zr, b=zr, out=jeq);
+    Mux16(a=false, b=true, sel=jeq, out=jeq16);
+
+    // JGE: ng = 0 or zr = 1
+    Or(a=notNg, b=zr, out=jge);
+    Mux16(a=false, b=true, sel=jge, out=jge16);
+
+    // JLT: ng = 1
+    And(a=ng, b=ng, out=jlt);
+    Mux16(a=false, b=true, sel=jlt, out=jlt16);
+
+    // JLE: ng = 1 or zr =1
+    Or(a=ng, b=zr, out=jle);
+    Mux16(a=false, b=true, sel=jle, out=jle16);
+
+    //JNE zr = 0
+    And(a=notZr, b=notZr, out=jne);
+    Mux16(a=false, b=true, sel=jne, out=jne16);
+
+    
+    // Jump condition mapping: 000=null, 001=JGT, 010=JEQ, 011=JGE, 100=JLT, 101=JNE, 110=JLE, 111=JMP
+    Mux8Way16(
+        a=false,
+        b=jgt16,
+        c=jeq16,
+        d=jge16,
+        e=jlt16,
+        f=jne16,
+        g=jle16,
+        h=true,
+        sel=instruction[0..2],
+        out=jump16,
+        out[0]=jumpCondition
+    );
+    
+    // get final pc
+    Inc16(in=pcFull, out=pcPlus1);
+    // Jump only if it's a C-instruction and jump condition is met
+    And(a=instruction[15], b=jumpCondition, out=jump);
+    // If jump, load A into PC; otherwise increment PC
+    Mux16(a=pcPlus1, b=outA, sel=jump, out=pcIn1);
+    // If reset, set PC to 0
+    Mux16(a=pcIn1, b=false, sel=reset, out=pcIn);
+
+    // PC always loads (either increment, jump, or reset)
+    Register(in=pcIn, load=true, out=pcFull, out[0..14]=pc);
+}
